@@ -6,6 +6,7 @@
 
 import pygame
 import sys
+import asyncio
 from constants import *
 from gymnast import Gymnast
 from ui import UI
@@ -476,18 +477,25 @@ class Game:
         self.camera_offset_y = self.HEIGHT / 2 - self.BAR_Y
         self.ui.reset_result()
         self.current_time = self.time_limit # 時間もリセット
+        
+        # IME無効化を再適用（念のため）
+        try:
+            pygame.key.stop_text_input()
+        except AttributeError:
+            pass
 
-    def run(self):
+    async def run(self):
         """メインゲームループ"""
         while self.running:
             self.handle_events()
             self.update()
             self.draw()
             self.clock.tick(self.FPS)
+            await asyncio.sleep(0)
 
         pygame.quit()
         sys.exit()
 
 if __name__ == "__main__":
     game = Game()
-    game.run()
+    asyncio.run(game.run())
