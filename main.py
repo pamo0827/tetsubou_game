@@ -13,7 +13,11 @@ from ui import UI
 
 class Game:
     def __init__(self):
-        pygame.init()
+        # 最小限の初期化
+        if not pygame.display.get_init():
+            pygame.display.init()
+        if not pygame.font.get_init():
+            pygame.font.init()
 
         # ゲームウィンドウの設定
         self.WIDTH = SCREEN_WIDTH
@@ -52,12 +56,12 @@ class Game:
         self.img_body_extended = None  # 体を伸ばした状態
         self.img_body_bent = None      # 体を曲げた状態
         try:
-            self.img_cloud = pygame.image.load('/Users/yoshi/tetsubou_game/image/clown.png').convert_alpha()
-            self.img_tree1 = pygame.image.load('/Users/yoshi/tetsubou_game/image/Tree1.png').convert_alpha()
+            self.img_cloud = pygame.image.load('image/clown.png').convert_alpha()
+            self.img_tree1 = pygame.image.load('image/Tree1.png').convert_alpha()
 
             # 体の画像を読み込み、左右反転
-            body1 = pygame.image.load('/Users/yoshi/tetsubou_game/image/body1.png').convert_alpha()
-            body2 = pygame.image.load('/Users/yoshi/tetsubou_game/image/body2.png').convert_alpha()
+            body1 = pygame.image.load('image/body1.png').convert_alpha()
+            body2 = pygame.image.load('image/body2.png').convert_alpha()
             self.img_body_extended = pygame.transform.flip(body1, True, False)  # 左右反転
             self.img_body_bent = pygame.transform.flip(body2, True, False)      # 左右反転
 
@@ -83,13 +87,28 @@ class Game:
 
         # ゲーム状態
         self.running = True
-        self.game_state = "title"  # title, playing, flying, landed
+        self.is_started = False
+        self.game_state = "waiting" # "waiting" -> "title" (after click)
 
     def handle_events(self):
         """イベント処理"""
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
+
+            # 初回クリック/キーで開始
+            if not self.is_started:
+                if event.type in [pygame.MOUSEBUTTONDOWN, pygame.KEYDOWN]:
+                    # ここで初めて音声を初期化する
+                    try:
+                        pygame.mixer.init()
+                        self.ui._load_sounds()
+                    except Exception as e:
+                        print(f"Mixer init failed: {e}")
+                    
+                    self.is_started = True
+                    self.game_state = "title"
+                    return
 
             if event.type == pygame.KEYDOWN:
                 # タイトル画面でiキー: ヘルプ表示切り替え
@@ -212,6 +231,15 @@ class Game:
         # 背景（柔らかい空色）
         self.screen.fill(SKY_COLOR)
         
+        if self.game_state == "waiting":
+            # 起動前の待機画面
+            font = pygame.font.Font(None, 50)
+            text = font.render("CLICK TO START", True, (60, 66, 82))
+            rect = text.get_rect(center=(self.WIDTH // 2, self.HEIGHT // 2))
+            self.screen.blit(text, rect)
+            pygame.display.flip()
+            return
+
         # 雲を描く
         self.draw_clouds()
 

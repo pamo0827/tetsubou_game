@@ -89,6 +89,39 @@ class UI:
         # 直前の状態
         self.last_combo = 0
 
+        # 音源
+        self.sounds = {}
+        self._load_sounds()
+
+    def _load_sounds(self):
+        """音源の読み込み（エラー回避付き）"""
+        if not pygame.mixer.get_init():
+            return
+
+        sound_files = {
+            'button': 'sounds/button.wav',
+            'swing': 'sounds/swing.wav',
+            'land_ok': 'sounds/land_ok.wav'
+        }
+        for name, path in sound_files.items():
+            try:
+                if os.path.exists(path):
+                    self.sounds[name] = pygame.mixer.Sound(path)
+            except Exception as e:
+                print(f"Could not load sound {name}: {e}")
+
+    def play_button_sound(self):
+        if 'button' in self.sounds:
+            self.sounds['button'].play()
+
+    def play_swing_sound(self):
+        if 'swing' in self.sounds:
+            self.sounds['swing'].play()
+
+    def play_landing_sound(self, success=True):
+        if 'land_ok' in self.sounds:
+            self.sounds['land_ok'].play()
+
     def _load_safe_font(self, size):
         """フォント読み込み（丸ゴシック優先）"""
         macos_font_paths = [
