@@ -5,7 +5,7 @@
 
 ## ゲームプレイ
 
-**[Webで遊ぶ (クリックしてスタート)](https://tetsubou-game-pamo.web.app)**
+**[Webで遊ぶ (クリックしてスタート)](https://pamo0827.github.io/tetsubou_game/)**
 
 ※ PCブラウザ推奨（キーボード操作が必要です）
 
@@ -29,7 +29,7 @@
 - **Python**: ゲームロジック
 - **Pygame**: グラフィック・入力処理
 - **Pygbag**: Webブラウザ対応 (WebAssembly)
-- **Firebase Hosting**: デプロイ環境
+- **GitHub Pages**: デプロイ環境
 
 ## 開発者
 

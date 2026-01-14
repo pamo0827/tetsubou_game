@@ -436,7 +436,7 @@ class Game:
 
                 scaled_tree = pygame.transform.smoothscale(tree_img, (scaled_w, scaled_h))
 
-                tree_rect = scaled_tree.get_rect(midbottom=(screen_x, screen_y + 80 * cam['scale']))
+                tree_rect = scaled_tree.get_rect(midbottom=(screen_x, screen_y))
                 self.screen.blit(scaled_tree, tree_rect)
 
     def draw_ground(self, cam):

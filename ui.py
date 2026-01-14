@@ -123,15 +123,24 @@ class UI:
             self.sounds['land_ok'].play()
 
     def _load_safe_font(self, size):
-        """フォント読み込み（丸ゴシック優先）"""
+        """フォント読み込み（プロジェクト内フォント優先）"""
+        # プロジェクト内のフォントを最優先（Web/ローカル両対応）
+        try:
+            return pygame.font.Font("font/mplus-rounded.ttf", size)
+        except Exception:
+            pass
+
+        # macOS用フォールバック
         macos_font_paths = [
             "/System/Library/Fonts/ヒラギノ丸ゴ ProN W4.ttc",
-            "/System/Library/Fonts/Hiragino Sans GB.ttc", 
+            "/System/Library/Fonts/Hiragino Sans GB.ttc",
             "/System/Library/Fonts/ヒラギノ角ゴシック W4.ttc"
         ]
         for path in macos_font_paths:
-            if os.path.exists(path):
+            try:
                 return pygame.font.Font(path, size)
+            except Exception:
+                continue
         return pygame.font.Font(None, size)
 
     def update(self):
