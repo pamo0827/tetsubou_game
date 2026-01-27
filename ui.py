@@ -86,6 +86,11 @@ class UI:
         self.final_distance = 0.0
         self.is_result_shown = False
 
+        # ボタンの矩形（タッチ判定用）
+        self.action_btn_rect = None
+        self.jump_btn_rect = None
+        self.retry_btn_rect = None
+
         # 直前の状態
         self.last_combo = 0
 
@@ -345,6 +350,40 @@ class UI:
         back_text = self.font_bold.render("PRESS ESC or I TO RETURN", True, self.colors['TEXT_SUB'])
         screen.blit(back_text, back_text.get_rect(center=(center_x, py + panel_h - 40)))
 
+    def draw_waiting(self, screen):
+        """起動待機画面（リデザイン版）"""
+        center_x = self.screen_width // 2
+        center_y = self.screen_height // 2
+
+        # 背景グラデーション（簡易的）
+        screen.fill(SKY_COLOR)
+        
+        # 装飾：回転するパーティクル的なもの
+        t = pygame.time.get_ticks() / 1000.0
+        for i in range(8):
+            angle = t + i * (math.pi * 2 / 8)
+            r = 100 + math.sin(t * 2 + i) * 20
+            px = center_x + math.cos(angle) * r
+            py = center_y + math.sin(angle) * r
+            pygame.draw.circle(screen, (255, 255, 255, 100), (int(px), int(py)), 8)
+
+        # タイトル
+        title_surf = self.font_title.render("大車輪てつぼうくん", True, self.colors['ACCENT_CYAN'])
+        # 影
+        title_shadow = self.font_title.render("大車輪てつぼうくん", True, (255, 255, 255))
+        screen.blit(title_shadow, title_shadow.get_rect(center=(center_x + 3, center_y - 47)))
+        screen.blit(title_surf, title_surf.get_rect(center=(center_x, center_y - 50)))
+
+        # TAP TO START（点滅）
+        alpha = int(155 + math.sin(t * 5) * 100)
+        start_text = self.font_large.render("TAP TO START", True, self.colors['TEXT_MAIN'])
+        start_text.set_alpha(alpha)
+        screen.blit(start_text, start_text.get_rect(center=(center_x, center_y + 50)))
+
+        # copyright
+        copy_text = self.font_tiny.render("© 2026 Tetsubou Project", True, self.colors['TEXT_SUB'])
+        screen.blit(copy_text, copy_text.get_rect(center=(center_x, self.screen_height - 30)))
+
     def _draw_hud(self, screen, combo, time_left, is_bent, quality, timer):
         """プレイ中HUD"""
         
@@ -410,12 +449,18 @@ class UI:
 
         # 操作インジケータ（左下）
         ix, iy = 40, self.screen_height - 100
+        # ボタンのヒットボックスを保存（少し大きめに）
+        self.action_btn_rect = pygame.Rect(ix - 10, iy - 10, 80, 70)
+        
         self.draw_key(screen, "SPC", ix, iy, pressed=is_bent)
         action_text = "縮む" if is_bent else "伸ばす"
         screen.blit(self.font_small.render(action_text, True, self.colors['TEXT_MAIN']), (ix + 70, iy + 15))
 
         # Enterで離すガイド（その右）
         ex = ix + 160
+        # ボタンのヒットボックスを保存
+        self.jump_btn_rect = pygame.Rect(ex - 10, iy - 10, 80, 70)
+        
         self.draw_key(screen, "ENT", ex, iy)
         screen.blit(self.font_small.render("離す", True, self.colors['TEXT_MAIN']), (ex + 70, iy + 15))
 
@@ -453,6 +498,7 @@ class UI:
             screen.blit(r_surf, r_surf.get_rect(center=(center_x, py + 230)))
             
             # リトライ案内
+            self.retry_btn_rect = pygame.Rect(center_x - 30, py + 300, 60, 50)
             self.draw_key(screen, "R", center_x - 30, py + 300)
             screen.blit(self.font_small.render("RETRY", True, self.colors['TEXT_MAIN']), (center_x + 40, py + 315))
 

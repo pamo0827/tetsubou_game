@@ -110,6 +110,38 @@ class Game:
                     self.game_state = "title"
                     return
 
+            # タッチ操作（マウス操作）への対応
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if self.game_state == "playing":
+                    # アクションボタン（屈む）
+                    if self.ui.action_btn_rect and self.ui.action_btn_rect.collidepoint(event.pos):
+                        if not self.gymnast.released:
+                            self.gymnast.bend()
+                    
+                    # ジャンプボタン（離す）
+                    elif self.ui.jump_btn_rect and self.ui.jump_btn_rect.collidepoint(event.pos):
+                        if not self.gymnast.released:
+                            self.gymnast.release()
+                            self.game_state = "flying"
+                            
+                elif self.game_state == "landed":
+                    # リトライボタン
+                    if self.ui.retry_btn_rect and self.ui.retry_btn_rect.collidepoint(event.pos):
+                        self.reset_game()
+                
+                elif self.game_state == "title":
+                     # タイトル画面クリックで開始
+                     # ボタン判定などが厳密にないので、画面全体のどこを押しても開始とする
+                     self.game_state = "playing"
+                     self.current_time = self.time_limit
+
+            elif event.type == pygame.MOUSEBUTTONUP:
+                if self.game_state == "playing":
+                     # アクションボタンを離したら伸ばす
+                     # 操作性を良くするため、ボタン領域外で離しても伸ばす判定とする
+                     if not self.gymnast.released:
+                         self.gymnast.extend()
+
             if event.type == pygame.KEYDOWN:
                 # タイトル画面でiキー: ヘルプ表示切り替え
                 if self.game_state == "title" and event.key == pygame.K_i:
@@ -233,10 +265,7 @@ class Game:
         
         if self.game_state == "waiting":
             # 起動前の待機画面
-            font = pygame.font.Font(None, 50)
-            text = font.render("CLICK TO START", True, (60, 66, 82))
-            rect = text.get_rect(center=(self.WIDTH // 2, self.HEIGHT // 2))
-            self.screen.blit(text, rect)
+            self.ui.draw_waiting(self.screen)
             pygame.display.flip()
             return
 
