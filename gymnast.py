@@ -27,8 +27,8 @@ class Gymnast:
         self.img_body_bent = img_body_bent
 
         # 物理パラメータ（現実世界の物理を再現）
-        self.angle = math.pi / 2  # 初期角度（真下）
-        self.angular_velocity = 0.0  # 角速度
+        self.angle = 0.0  # 初期角度（真下）
+        self.angular_velocity = 0.05  # 初期速度を少し付与
         self.angular_momentum = 0.0  # 角運動量（保存される）
         self.gravity = GRAVITY_SWING  # 重力（よりリアルに調整）
         self.damping = DAMPING  # 減衰係数（飛距離を伸ばすため、減衰を少し緩和）
@@ -99,63 +99,101 @@ class Gymnast:
                 # 現在伸びている → 曲げる
                 self.bend()
 
+    def _calculate_max_angle(self):
+        """
+        現在のエネルギーから最大到達角度（振幅）を推定する
+        """
+        # 現在の運動エネルギー + ポテンシャルエネルギー
+        # E = 1/2 I w^2 + m g r (1 - cos(theta))
+        # 基準: 最下点(0)
+        
+        # 現在のパラメータ
+        current_r = self.arm_length * self.bent_ratio
+        current_I = self.mass * (current_r ** 2)
+        
+        # 運動エネルギー
+        ke = 0.5 * current_I * (self.angular_velocity ** 2)
+        
+        # ポテンシャルエネルギー (最下点基準)
+        # cos(0)=1 -> 1-1=0.
+        # cos(pi)=-1 -> 1-(-1)=2.
+        pe = self.mass * self.gravity * current_r * (1.0 - math.cos(self.angle))
+        
+        total_energy = ke + pe
+        
+        # 最大到達点では w=0 なので E = m g r (1 - cos(max_theta))
+        # 1 - cos(max_theta) = E / (m g r)
+        # cos(max_theta) = 1 - E / (m g r)
+        
+        # 回転に必要なエネルギー閾値
+        potential_max = self.mass * self.gravity * current_r * 2.0 # 最上点
+        
+        if total_energy >= potential_max:
+            # 回転モード
+            return math.pi
+        else:
+            # 振り子モード
+            val = 1.0 - total_energy / (self.mass * self.gravity * current_r)
+            val = max(-1.0, min(1.0, val)) # クランプ
+            return math.acos(val)
+
     def check_timing_bonus(self):
         """
-        タイミングボーナスのチェック
-        正しいタイミングで屈伸するとエネルギーが追加される
+        タイミングボーナスのチェック（シンプル版）
+        方針：最下点（角度0）付近で「縮む（Bend）」と加速。
         """
         # フィードバックタイマーをリセット
         self.timing_feedback_timer = TIMING_FEEDBACK_DURATION
 
-        # 現在の動き（上昇中か下降中か）を判定
-        # angle=0が真下。
-        # sin(angle)と角速度の積で判定可能
-        # sin(angle) > 0 (右側), vel > 0 (左回転=上昇) -> 積>0 (上昇)
-        # sin(angle) > 0 (右側), vel < 0 (右回転=下降) -> 積<0 (下降)
-        # sin(angle) < 0 (左側), vel > 0 (左回転=下降) -> 積<0 (下降)
-        # sin(angle) < 0 (左側), vel < 0 (右回転=上昇) -> 積>0 (上昇)
+        # 角度を正規化 (-pi ~ pi, 0が真下)
+        current_angle = (self.angle + math.pi) % (2 * math.pi) - math.pi
+        abs_angle = abs(current_angle)
         
-        # 0に近いとき（真下付近）の誤判定を防ぐため、sin値を使用
-        sin_angle = math.sin(self.angle)
-        is_rising = (sin_angle * self.angular_velocity) > 0
-        is_falling = (sin_angle * self.angular_velocity) < 0
-        
-        # 速度が十分あるかチェック
-        has_speed = abs(self.angular_velocity) > MIN_ANGULAR_VELOCITY
+        # 判定閾値 (ラジアン)
+        # 0.50 rad ≒ 28度 (少し広げた)
+        # 0.80 rad ≒ 45度
+        THRESHOLD_PERFECT = 0.50
+        THRESHOLD_GOOD = 0.80
 
         if self.is_bent:
-            # 屈むアクション（加速したい）
-            # 上昇中に屈むのがセオリー（半径を小さくして回転速度を上げる）
-            if is_rising and has_speed:
+            # 「縮む」アクション (スペースキーを押した)
+            # 最下点付近で縮むのが正解
+            if abs_angle < THRESHOLD_PERFECT:
                 self.timing_quality = "perfect"
                 self.combo += 1
                 return True
-            elif abs(self.angular_velocity) < MIN_ANGULAR_VELOCITY:
-                # 速度がほとんどない時はOK
+            elif abs_angle < THRESHOLD_GOOD:
                 self.timing_quality = "good"
-                self.combo = 0
+                self.combo = 0 # コンボ切れ
                 return True
             else:
-                # 下降中に屈むのは減速要因
                 self.timing_quality = "poor"
                 self.combo = 0
                 return False
         else:
-            # 伸ばすアクション（重力を受けたい）
-            # 下降中に伸ばすのがセオリー（遠心力を最大化）
-            if is_falling and has_speed:
-                self.timing_quality = "perfect"
-                self.combo += 1
+            # 「伸ばす」アクション (スペースキーを離した)
+            
+            # リリース操作は基本的に「失敗」扱いにしない（ストレス軽減）
+            # ただし、物理的には最下点で伸ばすと減速する（角運動量保存）
+            
+            if abs_angle > THRESHOLD_GOOD:
+                self.timing_quality = "good" # 理想的なリリース
+                self.timing_feedback_timer = TIMING_FEEDBACK_DURATION
                 return True
-            elif abs(self.angular_velocity) < MIN_ANGULAR_VELOCITY:
+            elif abs_angle > THRESHOLD_PERFECT:
                 self.timing_quality = "good"
-                self.combo = 0
+                self.timing_feedback_timer = TIMING_FEEDBACK_DURATION
                 return True
             else:
-                # 上昇中に伸ばすのはブレーキ
-                self.timing_quality = "poor"
-                self.combo = 0
-                return False
+                # 最下点付近でのリリース（Safe Release）
+                # 直前の判定がPerfectなら、それを維持する（表示を上書きしない）
+                # タップ操作（押してすぐ離す）の時にPerfectがGoodで消されるのを防ぐ
+                if self.timing_quality == "perfect" and self.timing_feedback_timer > 0:
+                    return True
+                
+                self.timing_quality = "good"
+                self.timing_feedback_timer = TIMING_FEEDBACK_DURATION
+                return True
 
     def release(self):
         """
@@ -185,11 +223,11 @@ class Gymnast:
                 tangent_x = -math.cos(self.angle)
                 tangent_y = math.sin(self.angle)
 
-            # 初速度を設定（飛距離を伸ばすため1.5倍のブースト）
-            velocity_boost = 1.5
+            # 初速度を設定（飛距離を伸ばすため2.0倍のブースト）
+            velocity_boost = 2.0
 
             # 回転数ボーナス（より多く回転した方が飛距離が伸びる）
-            rotation_bonus = 1.0 + (self.rotation_count * 0.1)  # 回転1回ごとに10%増加
+            rotation_bonus = 1.0 + (self.rotation_count * 0.2)  # 回転1回ごとに20%増加
 
             # 最終的な初速度
             self.velocity_x = speed * tangent_x * velocity_boost * rotation_bonus
@@ -254,18 +292,25 @@ class Gymnast:
         # 角加速度: α = τ / I
         angular_acceleration = gravity_torque / current_moment
 
+        # 高速回転時の加速抑制係数（大車輪中の急加速を防ぐ）
+        speed_dampener = 1.0
+        if abs(self.angular_velocity) > 0.15:
+            # 0.15を超えると加速効果が徐々に落ちる（最大で元の20%まで）
+            speed_dampener = max(0.2, 1.0 - (abs(self.angular_velocity) - 0.15) * 4.0)
+
         # タイミング品質に応じてエネルギーを追加（直前の屈伸動作の評価）
         # コンボに応じて加速力を変化（徐々に速く）
         if self.timing_feedback_timer > 0:
             if self.timing_quality == "perfect":
                 # コンボボーナス: 基礎値は低め、コンボで上昇（上限あり）
                 combo_bonus = min(self.combo * ENERGY_BOOST_COMBO_BONUS, ENERGY_BOOST_COMBO_MAX)
-                energy_boost = ENERGY_BOOST_PERFECT_BASE + combo_bonus
+                energy_boost = (ENERGY_BOOST_PERFECT_BASE + combo_bonus) * speed_dampener
 
                 angular_acceleration += energy_boost * (1 if self.angular_velocity > 0 else -1)
             elif self.timing_quality == "good":
                 # 良いタイミング
-                angular_acceleration += ENERGY_BOOST_GOOD * (1 if self.angular_velocity > 0 else -1)
+                energy_boost = ENERGY_BOOST_GOOD * speed_dampener
+                angular_acceleration += energy_boost * (1 if self.angular_velocity > 0 else -1)
             elif self.timing_quality == "poor":
                 # 悪いタイミング：エネルギーロス
                 angular_acceleration += ENERGY_LOSS_POOR * (1 if self.angular_velocity > 0 else -1)
@@ -313,16 +358,75 @@ class Gymnast:
         momentum = abs(self.angular_velocity) * 20
         return min(momentum, 3.0)
 
-    def draw(self, screen, cam=None):
+    def draw(self, screen, cam=None, show_guide=False):
         """選手を描画（画像ベース）"""
-        if not self.released:
-            self.draw_guide_zones(screen, cam)
+        if not self.released and show_guide:
+            self.draw_guide_bar(screen)
 
         self._draw_trail(screen, cam)
 
         # 画像がある場合は画像で描画
         if self.img_body_extended and self.img_body_bent:
             self._draw_body_with_image(screen, cam)
+
+    def draw_guide_bar(self, screen):
+        """画面左側にタイミングガイドバーを描画（シンプル固定スケール版）"""
+        # バーの設定
+        bar_x = 30
+        bar_y = 150
+        bar_w = 20
+        bar_h = 300
+        center_y = bar_y + bar_h // 2
+        
+        # 背景
+        bar_rect = pygame.Rect(bar_x, bar_y, bar_w, bar_h)
+        pygame.draw.rect(screen, (40, 44, 52), bar_rect, border_radius=10)
+        
+        # 中央線（最下点 TARGET）
+        pygame.draw.line(screen, (200, 200, 200), (bar_x - 5, center_y), (bar_x + bar_w + 5, center_y), 2)
+        
+        # 表示スケール: バーの端を ±120度 (2/3 pi) とする
+        SCALE_RANGE = math.pi * 0.66 
+        
+        def get_y(ang):
+            # ang: -SCALE ~ +SCALE
+            ratio = ang / SCALE_RANGE
+            # 前回のUIに合わせる: 上半分: 右振れ (+angle), 下半分: 左振れ (-angle)
+            # 画面Y座標は上が小さいので、+ratio -> 上(-offset)
+            ratio = max(-1.0, min(1.0, ratio))
+            return center_y - ratio * (bar_h / 2)
+
+        # 判定エリアの描画
+        # PERFECTゾーン (±28度以内)
+        THRESHOLD_PERFECT = 0.50
+        p_top = get_y(THRESHOLD_PERFECT)
+        p_btm = get_y(-THRESHOLD_PERFECT)
+        p_rect = pygame.Rect(bar_x, p_top, bar_w, p_btm - p_top)
+        pygame.draw.rect(screen, PERFECT_ZONE_COLOR, p_rect)
+        
+        # GOODゾーン (±45度以内) - PERFECTの外側
+        THRESHOLD_GOOD = 0.80
+        # 上側
+        g_top = get_y(THRESHOLD_GOOD)
+        g_btm = p_top
+        pygame.draw.rect(screen, GUIDE_ZONE_COLOR, (bar_x, g_top, bar_w, g_btm - g_top))
+        # 下側
+        g_top_neg = p_btm
+        g_btm_neg = get_y(-THRESHOLD_GOOD)
+        pygame.draw.rect(screen, GUIDE_ZONE_COLOR, (bar_x, g_top_neg, bar_w, g_btm_neg - g_top_neg))
+
+        # カーソル (現在位置)
+        current_angle = (self.angle + math.pi) % (2 * math.pi) - math.pi
+        cursor_y = get_y(current_angle)
+        
+        # カーソル色
+        c_color = (255, 255, 255)
+        if p_top <= cursor_y <= p_btm:
+            c_color = (255, 255, 0) # 黄色エリア内
+        
+        # カーソル描画
+        pygame.draw.circle(screen, c_color, (bar_x + bar_w // 2, int(cursor_y)), 8)
+        pygame.draw.circle(screen, (0, 0, 0), (bar_x + bar_w // 2, int(cursor_y)), 8, 1)
 
     def _draw_body_with_image(self, screen, cam):
         """画像を使って体を描画"""
@@ -333,8 +437,8 @@ class Gymnast:
         cam_scale = cam['scale'] if cam else 1.0
 
         # 画像のサイズを調整（適切なサイズに）
-        # ターゲットの高さを設定（ゲーム内の単位で約120px）
-        target_height = 120 * cam_scale
+        # ターゲットの高さを設定（ゲーム内の単位で約160px）
+        target_height = 160 * cam_scale
         
         original_width = body_img.get_width()
         original_height = body_img.get_height()
@@ -420,56 +524,4 @@ class Gymnast:
             alpha = int(255 * (i / len(self.trail)) * 0.4)
             width = max(1, int(10 * scale))
             pygame.draw.line(screen, TRAIL_COLOR[:3], start_pos, end_pos, width)
-
-    def draw_guide_zones(self, screen, cam):
-        """タイミングガイドを描画（正確版・優しい色）"""
-        if abs(self.angular_velocity) < MIN_ANGULAR_VELOCITY:
-            return
-
-        scale = cam['scale'] if cam else 1.0
-        radius = GUIDE_ZONE_RADIUS * scale
-        center = (self.bar_x * scale + cam['ox'], self.bar_y * scale + cam['oy'])
-
-        # 表示すべきゾーン
-        show_bend_zone = not self.is_bent
-        show_extend_zone = self.is_bent
-
-        start_angle = 0
-        end_angle = 0
-        color = None
-
-        guide_color = GUIDE_ZONE_COLOR
-
-        if self.angular_velocity > 0:
-            if show_bend_zone:
-                start_angle = 0
-                end_angle = math.pi
-                color = guide_color
-            elif show_extend_zone:
-                start_angle = math.pi
-                end_angle = 2 * math.pi
-                color = guide_color
-
-        else:
-            if show_bend_zone:
-                start_angle = -math.pi
-                end_angle = 0
-                color = guide_color
-            elif show_extend_zone:
-                start_angle = 0
-                end_angle = math.pi
-                color = guide_color
-
-        if color:
-            points = [center]
-            steps = 30
-            for i in range(steps + 1):
-                theta = start_angle + (end_angle - start_angle) * i / steps
-                px = center[0] + radius * math.sin(theta)
-                py = center[1] + radius * math.cos(theta)
-                points.append((px, py))
-                
-            shape_surf = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
-            pygame.draw.polygon(shape_surf, color, points)
-            screen.blit(shape_surf, (0,0))
 

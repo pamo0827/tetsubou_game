@@ -86,6 +86,11 @@ class UI:
         self.final_distance = 0.0
         self.is_result_shown = False
 
+        # ボタンの矩形（タッチ判定用）
+        self.action_btn_rect = None
+        self.jump_btn_rect = None
+        self.retry_btn_rect = None
+
         # 直前の状態
         self.last_combo = 0
 
@@ -226,9 +231,9 @@ class UI:
         # 本体
         self.draw_rounded_rect(screen, self.colors['PANEL_BG'], rect, radius=20)
 
-    def draw_key(self, screen, text, x, y, pressed=False):
+    def draw_key(self, screen, text, x, y, pressed=False, width=60, height=50):
         """キーアイコン"""
-        w, h = 60, 50
+        w, h = width, height
         offset = 4 if not pressed else 2
         bg_color = self.colors['KEY_BORDER']
         key_color = self.colors['KEY_BG'] if not pressed else (230, 230, 235)
@@ -274,26 +279,55 @@ class UI:
         center_y = self.screen_height // 2 - 50 + offset_y
 
         # タイトルロゴ（テキスト）
-        text = "大車輪てつぼうくん"
+        text = "ブンブンジャンプ"
+        title_y = center_y - 150
         # 影
         shadow = self.font_title.render(text, True, (255,255,255))
-        screen.blit(shadow, shadow.get_rect(center=(center_x+4, center_y+4)))
+        screen.blit(shadow, shadow.get_rect(center=(center_x+4, title_y+4)))
         # 本体
         main = self.font_title.render(text, True, self.colors['ACCENT_CYAN'])
-        screen.blit(main, main.get_rect(center=(center_x, center_y)))
+        screen.blit(main, main.get_rect(center=(center_x, title_y)))
+
+        # ゲーム説明パネル
+        panel_w, panel_h = 600, 240
+        panel_rect = pygame.Rect(center_x - panel_w//2, center_y - 60, panel_w, panel_h)
+        # 背景（透明度の高い灰色）
+        self.draw_rounded_rect(screen, (50, 60, 70, 100), panel_rect, radius=15)
+        
+        # 説明文
+        instructions = [
+            "タイミングよく画面をタップして加速！",
+            "・黄色いゲージでタップ：PERFECT加速",
+            "・緑色いゲージでタップ：GOOD加速",
+            "・十分に加速したらボタンでジャンプ！"
+        ]
+        
+        start_y = panel_rect.top + 40
+        text_start_x = panel_rect.left + 60 # 左揃えの開始位置
+        
+        for i, line in enumerate(instructions):
+            # 箇条書きの色分け
+            color = self.colors['WHITE']
+            if "PERFECT" in line:
+                color = (255, 255, 200)
+            
+            text_surf = self.font_small.render(line, True, color)
+            # 左揃えで描画
+            screen.blit(text_surf, (text_start_x, start_y + i * 40))
 
         # Press Enter（ブレスアニメーション）
         alpha = int(155 + math.sin(self.anim_timer * 0.1) * 100)
         press_text = self.font_bold.render("PRESS ENTER TO START", True, self.colors['ACCENT_PINK'])
         press_text.set_alpha(alpha)
-        screen.blit(press_text, press_text.get_rect(center=(center_x, self.screen_height - 100)))
+        screen.blit(press_text, press_text.get_rect(center=(center_x, self.screen_height - 130)))
 
-        # 操作ガイド
-        self.draw_key(screen, "SPC", center_x - 120, self.screen_height - 180)
-        screen.blit(self.font_small.render("加速", True, self.colors['TEXT_MAIN']), (center_x - 50, self.screen_height - 165))
+        # 操作ガイド（復元）
+        key_y = self.screen_height - 60
+        self.draw_key(screen, "SPC", center_x - 120, key_y - 15)
+        screen.blit(self.font_small.render("加速", True, self.colors['TEXT_MAIN']), (center_x - 50, key_y))
 
-        self.draw_key(screen, "ENT", center_x + 20, self.screen_height - 180)
-        screen.blit(self.font_small.render("ジャンプ", True, self.colors['TEXT_MAIN']), (center_x + 90, self.screen_height - 165))
+        self.draw_key(screen, "ENT", center_x + 20, key_y - 15)
+        screen.blit(self.font_small.render("ジャンプ", True, self.colors['TEXT_MAIN']), (center_x + 90, key_y))
 
     def _draw_help(self, screen):
         """ヘルプ画面（詳細な遊び方）"""
@@ -344,6 +378,68 @@ class UI:
         # 戻る案内
         back_text = self.font_bold.render("PRESS ESC or I TO RETURN", True, self.colors['TEXT_SUB'])
         screen.blit(back_text, back_text.get_rect(center=(center_x, py + panel_h - 40)))
+
+    def draw_waiting(self, screen):
+        """起動待機画面（リデザイン版）"""
+        center_x = self.screen_width // 2
+        center_y = self.screen_height // 2
+
+        # 背景グラデーション（簡易的）
+        screen.fill(SKY_COLOR)
+        
+        # 装飾：回転するパーティクル的なもの
+        t = pygame.time.get_ticks() / 1000.0
+        for i in range(8):
+            angle = t + i * (math.pi * 2 / 8)
+            r = 100 + math.sin(t * 2 + i) * 20
+            px = center_x + math.cos(angle) * r
+            py = center_y + math.sin(angle) * r
+            pygame.draw.circle(screen, (255, 255, 255, 100), (int(px), int(py)), 8)
+
+        # タイトル (少し上に移動)
+        title_y = center_y - 180
+        title_surf = self.font_title.render("ブンブンジャンプ", True, self.colors['ACCENT_CYAN'])
+        # 影
+        title_shadow = self.font_title.render("ブンブンジャンプ", True, (255, 255, 255))
+        screen.blit(title_shadow, title_shadow.get_rect(center=(center_x + 3, title_y + 3)))
+        screen.blit(title_surf, title_surf.get_rect(center=(center_x, title_y)))
+
+        # ゲーム説明パネル
+        panel_w, panel_h = 600, 240
+        panel_rect = pygame.Rect(center_x - panel_w//2, center_y - 80, panel_w, panel_h)
+        # 背景（透明度の高い灰色）
+        self.draw_rounded_rect(screen, (50, 60, 70, 100), panel_rect, radius=15)
+        
+        # 説明文
+        instructions = [
+            "タイミングよく画面をタップして加速！",
+            "・黄色いゲージでタップ：PERFECT加速",
+            "・緑色いゲージでタップ：GOOD加速",
+            "・十分に加速したらボタンでジャンプ！"
+        ]
+        
+        start_y = panel_rect.top + 40
+        text_start_x = panel_rect.left + 60
+        
+        for i, line in enumerate(instructions):
+            # 箇条書きの色分け
+            color = self.colors['WHITE']
+            if "PERFECT" in line:
+                # PERFECTの部分だけ色を変えるのは難しいので行全体を少し黄色っぽく
+                color = (255, 255, 200)
+            
+            text_surf = self.font_small.render(line, True, color)
+            screen.blit(text_surf, (text_start_x, start_y + i * 40))
+
+        # TAP TO START（点滅）
+        alpha = int(155 + math.sin(t * 5) * 100)
+        start_text = self.font_large.render("TAP TO START", True, self.colors['TEXT_MAIN'])
+        start_text.set_alpha(alpha)
+        screen.blit(start_text, start_text.get_rect(center=(center_x, center_y + 220)))
+
+        # copyright
+        copy_text = self.font_tiny.render("© 2026 Tetsubou Project", True, self.colors['TEXT_SUB'])
+        screen.blit(copy_text, copy_text.get_rect(center=(center_x, self.screen_height - 30)))
 
     def _draw_hud(self, screen, combo, time_left, is_bent, quality, timer):
         """プレイ中HUD"""
@@ -409,15 +505,15 @@ class UI:
                 screen.blit(surf, surf.get_rect(center=(self.screen_width//2, 200 - dy)))
 
         # 操作インジケータ（左下）
-        ix, iy = 40, self.screen_height - 100
-        self.draw_key(screen, "SPC", ix, iy, pressed=is_bent)
-        action_text = "縮む" if is_bent else "伸ばす"
-        screen.blit(self.font_small.render(action_text, True, self.colors['TEXT_MAIN']), (ix + 70, iy + 15))
-
-        # Enterで離すガイド（その右）
-        ex = ix + 160
-        self.draw_key(screen, "ENT", ex, iy)
-        screen.blit(self.font_small.render("離す", True, self.colors['TEXT_MAIN']), (ex + 70, iy + 15))
+        # スマホ向け：離すボタンのみを表示
+        jump_w, jump_h = 120, 80
+        ex, ey = 40, self.screen_height - 100
+        
+        # ボタンのヒットボックスを保存
+        self.jump_btn_rect = pygame.Rect(ex - 10, ey - 15, jump_w + 20, jump_h + 20)
+        
+        self.draw_key(screen, "ENT", ex, ey - 15, width=jump_w, height=jump_h)
+        screen.blit(self.font_small.render("離す", True, self.colors['TEXT_MAIN']), (ex + jump_w + 10, ey + 25))
 
     def _draw_result(self, screen):
         """リザルト画面（下からスライドイン）"""
@@ -442,23 +538,24 @@ class UI:
             rank = "D"
             color = self.colors['TEXT_SUB']
             ad = abs(self.final_distance)
-            if ad >= 1000: rank, color = "SSS", self.colors['ACCENT_ORANGE']
-            elif ad >= 800: rank, color = "SS", self.colors['ACCENT_ORANGE']
-            elif ad >= 600: rank, color = "S", self.colors['ACCENT_PINK']
-            elif ad >= 400: rank, color = "A", self.colors['ACCENT_PINK']
-            elif ad >= 200: rank, color = "B", self.colors['ACCENT_CYAN']
-            elif ad >= 100: rank, color = "C", self.colors['ACCENT_GREEN']
+            if ad >= 150: rank, color = "SSS", self.colors['ACCENT_ORANGE']
+            elif ad >= 120: rank, color = "SS", self.colors['ACCENT_ORANGE']
+            elif ad >= 100: rank, color = "S", self.colors['ACCENT_PINK']
+            elif ad >= 80: rank, color = "A", self.colors['ACCENT_PINK']
+            elif ad >= 50: rank, color = "B", self.colors['ACCENT_CYAN']
+            elif ad >= 20: rank, color = "C", self.colors['ACCENT_GREEN']
 
             r_surf = self.font_large.render(f"Rank {rank}", True, color)
             screen.blit(r_surf, r_surf.get_rect(center=(center_x, py + 230)))
             
             # リトライ案内
+            self.retry_btn_rect = pygame.Rect(center_x - 30, py + 300, 60, 50)
             self.draw_key(screen, "R", center_x - 30, py + 300)
             screen.blit(self.font_small.render("RETRY", True, self.colors['TEXT_MAIN']), (center_x + 40, py + 315))
 
     # 外部からのデータセット用メソッド
     def set_result(self, distance):
-        self.final_distance = distance / 10.0
+        self.final_distance = distance / DISTANCE_SCALE
         self.display_distance = 0.0 # カウントアップ開始値
         self.is_result_shown = True
         self.result_panel_y = self.screen_height # 初期位置リセット

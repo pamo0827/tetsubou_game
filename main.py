@@ -23,7 +23,7 @@ class Game:
         self.WIDTH = SCREEN_WIDTH
         self.HEIGHT = SCREEN_HEIGHT
         self.screen = pygame.display.set_mode((self.WIDTH, self.HEIGHT))
-        pygame.display.set_caption("大車輪てつぼうくん - 飛距離チャレンジ")
+        pygame.display.set_caption("ブンブンジャンプ - 飛距離チャレンジ")
 
         # 日本語入力（IME）を無効化
         try:
@@ -55,6 +55,15 @@ class Game:
         self.img_tree1 = None
         self.img_body_extended = None  # 体を伸ばした状態
         self.img_body_bent = None      # 体を曲げた状態
+
+        # デバッグ用パス確認
+        import os
+        print(f"DEBUG: Current cwd: {os.getcwd()}")
+        if os.path.exists('image'):
+            print(f"DEBUG: image dir contents: {os.listdir('image')}")
+        else:
+            print("DEBUG: 'image' directory NOT FOUND!")
+
         try:
             self.img_cloud = pygame.image.load('image/clown.png').convert_alpha()
             self.img_tree1 = pygame.image.load('image/Tree1.png').convert_alpha()
@@ -64,9 +73,13 @@ class Game:
             body2 = pygame.image.load('image/body2.png').convert_alpha()
             self.img_body_extended = pygame.transform.flip(body1, True, False)  # 左右反転
             self.img_body_bent = pygame.transform.flip(body2, True, False)      # 左右反転
+            
+            print("DEBUG: Assets loaded successfully.")
 
         except Exception as e:
-            print(f"Failed to load game assets: {e}")
+            print(f"CRITICAL ERROR: Failed to load game assets: {e}")
+            import traceback
+            traceback.print_exc()
 
         # 雲のワールド座標（Y座標を高く設定）
         self.clouds_world = [
@@ -109,6 +122,40 @@ class Game:
                     self.is_started = True
                     self.game_state = "title"
                     return
+
+            # タッチ操作（マウス操作）への対応
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if self.game_state == "playing":
+                    # ジャンプボタン（離す）優先判定
+                    if self.ui.jump_btn_rect and self.ui.jump_btn_rect.collidepoint(event.pos):
+                        if not self.gymnast.released:
+                            self.gymnast.release()
+                            self.game_state = "flying"
+                    
+                    # 画面のどこを押してもアクション（屈む）
+                    # ただしジャンプボタン以外
+                    else:
+                        if not self.gymnast.released:
+                            self.gymnast.bend()
+                            
+                elif self.game_state == "landed":
+                    # リトライボタン
+                    if self.ui.retry_btn_rect and self.ui.retry_btn_rect.collidepoint(event.pos):
+                        self.reset_game()
+                
+                elif self.game_state == "title":
+                     # タイトル画面クリックで開始
+                     # ボタン判定などが厳密にないので、画面全体のどこを押しても開始とする
+                     self.game_state = "playing"
+                     self.current_time = self.time_limit
+
+            elif event.type == pygame.MOUSEBUTTONUP:
+                if self.game_state == "playing":
+                     # アクションボタンを離したら伸ばす
+                     # ジャンプボタンを押していた場合も、離したタイミングで伸ばす処理が入っても問題ない
+                     # （リリース後は extend() は無視されるため）
+                     if not self.gymnast.released:
+                         self.gymnast.extend()
 
             if event.type == pygame.KEYDOWN:
                 # タイトル画面でiキー: ヘルプ表示切り替え
@@ -233,10 +280,7 @@ class Game:
         
         if self.game_state == "waiting":
             # 起動前の待機画面
-            font = pygame.font.Font(None, 50)
-            text = font.render("CLICK TO START", True, (60, 66, 82))
-            rect = text.get_rect(center=(self.WIDTH // 2, self.HEIGHT // 2))
-            self.screen.blit(text, rect)
+            self.ui.draw_waiting(self.screen)
             pygame.display.flip()
             return
 
@@ -257,7 +301,7 @@ class Game:
         self.draw_ground(cam)
 
         # 選手
-        self.gymnast.draw(self.screen, cam)
+        self.gymnast.draw(self.screen, cam, show_guide=(self.game_state == "playing"))
 
         # UI
         self.ui.draw(self.screen, self.gymnast.combo, self.current_time,
@@ -459,7 +503,7 @@ class Game:
             pygame.draw.rect(self.screen, GROUND_COLOR,
                            (0, max(0, int(screen_ground_y)), self.WIDTH, ground_height))
             
-        # 距離マーカー（100mごと）
+        # 距離マーカー（20mごと）
         center_x = self.WIDTH // 2
 
         # マーカー描画範囲を広げる
@@ -480,8 +524,8 @@ class Game:
                 # 距離テキスト (ピクセル -> メートル換算)
                 dist = int((mx - center_x) / DISTANCE_SCALE)
 
-                # 100m単位は極太ラインとテキスト
-                line_length = max(40, int(60 * cam['scale'] / 0.15))
+                # マーカーライン（短く調整）
+                line_length = max(10, int(15 * cam['scale'] / 0.15))
                 line_width = max(4, int(6 / cam['scale'] * 0.15))
                 
                 # 白いライン
@@ -492,7 +536,7 @@ class Game:
                     text = f"{abs(dist)}m"
                     text_surf = font.render(text, True, (255, 255, 255))
                     # テキストの位置調整（ラインの下）
-                    text_rect = text_surf.get_rect(center=(sx, sy + line_length + current_font_size))
+                    text_rect = text_surf.get_rect(center=(sx, sy + line_length + current_font_size * 0.8))
                     self.screen.blit(text_surf, text_rect)
 
 
