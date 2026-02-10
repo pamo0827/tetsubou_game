@@ -317,7 +317,7 @@ class UI:
 
         # Press Enter（ブレスアニメーション）
         alpha = int(155 + math.sin(self.anim_timer * 0.1) * 100)
-        press_text = self.font_bold.render("PRESS ENTER TO START", True, self.colors['ACCENT_PINK'])
+        press_text = self.font_bold.render("TAP TO START", True, self.colors['ACCENT_PINK'])
         press_text.set_alpha(alpha)
         screen.blit(press_text, press_text.get_rect(center=(center_x, self.screen_height - 130)))
 
@@ -380,62 +380,32 @@ class UI:
         screen.blit(back_text, back_text.get_rect(center=(center_x, py + panel_h - 40)))
 
     def draw_waiting(self, screen):
-        """起動待機画面（リデザイン版）"""
+        """起動待機画面（シンプルローディング）"""
         center_x = self.screen_width // 2
         center_y = self.screen_height // 2
 
         # 背景グラデーション（簡易的）
         screen.fill(SKY_COLOR)
         
-        # 装飾：回転するパーティクル的なもの
+        # ぐるぐるマーク（スピナー）
         t = pygame.time.get_ticks() / 1000.0
-        for i in range(8):
-            angle = t + i * (math.pi * 2 / 8)
-            r = 100 + math.sin(t * 2 + i) * 20
-            px = center_x + math.cos(angle) * r
-            py = center_y + math.sin(angle) * r
-            pygame.draw.circle(screen, (255, 255, 255, 100), (int(px), int(py)), 8)
-
-        # タイトル (少し上に移動)
-        title_y = center_y - 180
-        title_surf = self.font_title.render("ブンブンジャンプ", True, self.colors['ACCENT_CYAN'])
-        # 影
-        title_shadow = self.font_title.render("ブンブンジャンプ", True, (255, 255, 255))
-        screen.blit(title_shadow, title_shadow.get_rect(center=(center_x + 3, title_y + 3)))
-        screen.blit(title_surf, title_surf.get_rect(center=(center_x, title_y)))
-
-        # ゲーム説明パネル
-        panel_w, panel_h = 600, 240
-        panel_rect = pygame.Rect(center_x - panel_w//2, center_y - 80, panel_w, panel_h)
-        # 背景（透明度の高い灰色）
-        self.draw_rounded_rect(screen, (50, 60, 70, 100), panel_rect, radius=15)
-        
-        # 説明文
-        instructions = [
-            "タイミングよく画面をタップして加速！",
-            "・黄色いゲージでタップ：PERFECT加速",
-            "・緑色いゲージでタップ：GOOD加速",
-            "・十分に加速したらボタンでジャンプ！"
-        ]
-        
-        start_y = panel_rect.top + 40
-        text_start_x = panel_rect.left + 60
-        
-        for i, line in enumerate(instructions):
-            # 箇条書きの色分け
-            color = self.colors['WHITE']
-            if "PERFECT" in line:
-                # PERFECTの部分だけ色を変えるのは難しいので行全体を少し黄色っぽく
-                color = (255, 255, 200)
+        spinner_radius = 30
+        num_dots = 12
+        for i in range(num_dots):
+            angle = t * 5 + i * (math.pi * 2 / num_dots)
+            alpha = int(255 * (0.5 + 0.5 * math.sin(angle)))
+            dot_r = 5
+            px = center_x + math.cos(i * (math.pi * 2 / num_dots)) * spinner_radius
+            py = center_y + math.sin(i * (math.pi * 2 / num_dots)) * spinner_radius
             
-            text_surf = self.font_small.render(line, True, color)
-            screen.blit(text_surf, (text_start_x, start_y + i * 40))
+            # ドット描画
+            s = pygame.Surface((dot_r*2, dot_r*2), pygame.SRCALPHA)
+            pygame.draw.circle(s, (255, 255, 255, alpha), (dot_r, dot_r), dot_r)
+            screen.blit(s, (px - dot_r, py - dot_r))
 
-        # TAP TO START（点滅）
-        alpha = int(155 + math.sin(t * 5) * 100)
-        start_text = self.font_large.render("TAP TO START", True, self.colors['TEXT_MAIN'])
-        start_text.set_alpha(alpha)
-        screen.blit(start_text, start_text.get_rect(center=(center_x, center_y + 220)))
+        # "読み込み中" テキスト
+        load_text = self.font_medium.render("読み込み中...", True, self.colors['TEXT_MAIN'])
+        screen.blit(load_text, load_text.get_rect(center=(center_x, center_y + 60)))
 
         # copyright
         copy_text = self.font_tiny.render("© 2026 Tetsubou Project", True, self.colors['TEXT_SUB'])

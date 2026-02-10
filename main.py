@@ -101,27 +101,28 @@ class Game:
         # ゲーム状態
         self.running = True
         self.is_started = False
-        self.game_state = "waiting" # "waiting" -> "title" (after click)
+        self.game_state = "waiting" # "waiting" -> "title" (auto)
+        
+        # ローディング用タイマー
+        self.loading_timer = 0
+        self.LOADING_DURATION = 2.0 # 秒
+
+    def _start_game_from_loading(self):
+        """ローディング完了後の初期化処理"""
+        try:
+            pygame.mixer.init()
+            self.ui._load_sounds()
+        except Exception as e:
+            print(f"Mixer init failed: {e}")
+        
+        self.is_started = True
+        self.game_state = "title"
 
     def handle_events(self):
         """イベント処理"""
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
-
-            # 初回クリック/キーで開始
-            if not self.is_started:
-                if event.type in [pygame.MOUSEBUTTONDOWN, pygame.KEYDOWN]:
-                    # ここで初めて音声を初期化する
-                    try:
-                        pygame.mixer.init()
-                        self.ui._load_sounds()
-                    except Exception as e:
-                        print(f"Mixer init failed: {e}")
-                    
-                    self.is_started = True
-                    self.game_state = "title"
-                    return
 
             # タッチ操作（マウス操作）への対応
             if event.type == pygame.MOUSEBUTTONDOWN:
@@ -157,6 +158,11 @@ class Game:
                      if not self.gymnast.released:
                          self.gymnast.extend()
 
+            elif event.type == pygame.FINGERDOWN:
+                if self.game_state == "title":
+                     self.game_state = "playing"
+                     self.current_time = self.time_limit
+
             if event.type == pygame.KEYDOWN:
                 # タイトル画面でiキー: ヘルプ表示切り替え
                 if self.game_state == "title" and event.key == pygame.K_i:
@@ -186,6 +192,13 @@ class Game:
 
     def update(self):
         """ゲームロジックの更新"""
+        # ローディング画面の更新
+        if self.game_state == "waiting":
+            self.loading_timer += 1.0 / self.FPS
+            if self.loading_timer >= self.LOADING_DURATION:
+                self._start_game_from_loading()
+            return
+
         self.gymnast.update()
 
         # タイマー更新
